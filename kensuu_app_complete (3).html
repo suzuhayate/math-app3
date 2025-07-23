@@ -1,0 +1,316 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>📘 計算学習アプリ（100マス＋記録＋ランキング）</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Kosugi Maru', sans-serif;
+      background: #fff8f0;
+      color: #333;
+      padding: 20px;
+      max-width: 1000px;
+      margin: auto;
+    }
+    h1 {
+      text-align: center;
+      color: #ff6f61;
+      font-size: 2em;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 10px 20px;
+      background: #ffe4d1;
+      border-radius: 10px 10px 0 0;
+      cursor: pointer;
+      margin: 0 5px;
+    }
+    .tab.active {
+      background: #ffb347;
+      font-weight: bold;
+    }
+    .tab-content {
+      display: none;
+      background: white;
+      padding: 20px;
+      border: 2px solid #ffd8b1;
+      border-radius: 0 10px 10px 10px;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    table {
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      width: 50px;
+      height: 40px;
+      text-align: center;
+    }
+    input[type="number"] {
+      width: 40px;
+      font-size: 16px;
+      text-align: center;
+    }
+    .correct {
+      background-color: #c8f7c5;
+    }
+    .incorrect {
+      background-color: #f8d7da;
+      color: red;
+    }
+    .controls {
+      margin-top: 10px;
+    }
+    .result {
+      margin-top: 10px;
+      font-size: 1.1em;
+      color: #444;
+    }
+    .start-btn, .check-btn {
+      padding: 10px 20px;
+      background-color: #ffb347;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    canvas {
+      margin-top: 20px;
+    }
+    #stampArea {
+      margin-top: 10px;
+      font-size: 24px;
+      color: #e63946;
+    }
+    .ranking-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 16px;
+    }
+    .ranking-table th, .ranking-table td {
+      border: 1px solid #ffbfa3;
+      padding: 8px;
+    }
+    .ranking-table th {
+      background-color: #fff0e5;
+      color: #d17b47;
+    }
+    .ranking-table tr:nth-child(even) {
+      background-color: #fff7f0;
+    }
+    .ranking-table tr:nth-child(1) td {
+      font-weight: bold;
+      background-color: #ffe5cc;
+    }
+  </style>
+</head>
+<body>
+  <h1>📘 計算学習アプリ（100マス＋記録＋ランキング）</h1>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('practice')">🧠 チャレンジ</div>
+    <div class="tab" onclick="switchTab('record')">📊 記録とグラフ</div>
+    <div class="tab" onclick="switchTab('ranking')">🏆 ランキング</div>
+  </div>
+
+  <div id="practice" class="tab-content active">
+    <div class="controls">
+      名前: <input type="text" id="userName" placeholder="なまえ" />
+      <button class="start-btn" onclick="startPractice()">スタート</button>
+      <button class="check-btn" onclick="checkAnswers()">採点する</button>
+      <span id="timer">⏱️ 0:00</span>
+    </div>
+    <div id="gridContainer"></div>
+    <div class="result" id="resultArea"></div>
+    <div id="stampArea"></div>
+  </div>
+
+  <div id="record" class="tab-content">
+    <canvas id="scoreChart" width="800" height="300"></canvas>
+  </div>
+
+  <div id="ranking" class="tab-content">
+    <h2>🏅 上位20名のランキング</h2>
+    <table class="ranking-table" id="rankingTable"></table>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    let startTime = null;
+    let timerInterval;
+    let chart;
+
+    function switchTab(id) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelector('.tab[onclick*="' + id + '"]').classList.add('active');
+      document.getElementById(id).classList.add('active');
+      if (id === "record") renderChart();
+      if (id === "ranking") renderRanking();
+    }
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return m + ":" + s.toString().padStart(2, '0');
+    }
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function startPractice() {
+      const container = document.getElementById("gridContainer");
+      container.innerHTML = "";
+      document.getElementById("stampArea").innerHTML = "";
+      const table = document.createElement("table");
+      const rowHeaders = shuffle([...Array(10).keys()].map(i => i + 1));
+      const colHeaders = shuffle([...Array(10).keys()].map(i => i + 1));
+
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      headerRow.innerHTML = "<th>×</th>";
+      colHeaders.forEach(j => {
+        const th = document.createElement("th");
+        th.textContent = j;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+      for (let i = 0; i < 10; i++) {
+        const row = document.createElement("tr");
+        const th = document.createElement("th");
+        th.textContent = rowHeaders[i];
+        row.appendChild(th);
+        for (let j = 0; j < 10; j++) {
+          const td = document.createElement("td");
+          const input = document.createElement("input");
+          input.type = "number";
+          input.dataset.x = colHeaders[j];
+          input.dataset.y = rowHeaders[i];
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === "Tab") {
+              e.preventDefault();
+              const inputs = Array.from(document.querySelectorAll("#gridContainer input"));
+              const idx = inputs.indexOf(e.target);
+              if (idx >= 0 && idx < inputs.length - 1) inputs[idx + 1].focus();
+            }
+          });
+          td.appendChild(input);
+          row.appendChild(td);
+        }
+        tbody.appendChild(row);
+      }
+      table.appendChild(tbody);
+      container.appendChild(table);
+
+      startTime = Date.now();
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById("timer").textContent = `⏱️ ${formatTime(elapsed)}`;
+      }, 500);
+
+      document.getElementById("resultArea").textContent = "";
+    }
+
+    function getStampByTime(sec) {
+      if (sec <= 90) return "🕊️ 鳳凰";
+      if (sec <= 120) return "🐉 龍";
+      if (sec <= 180) return "🐯 トラ";
+      if (sec <= 240) return "🐶 犬";
+      if (sec <= 300) return "🐟 魚";
+      return "";
+    }
+
+    function checkAnswers() {
+      clearInterval(timerInterval);
+      const inputs = document.querySelectorAll("#gridContainer input");
+      let correct = 0, wrong = 0, blank = 0;
+
+      inputs.forEach(input => {
+        const x = parseInt(input.dataset.x);
+        const y = parseInt(input.dataset.y);
+        const expected = x * y;
+        const val = input.value.trim();
+        if (val === "") {
+          blank++;
+          input.classList.remove("correct", "incorrect");
+        } else if (parseInt(val) === expected) {
+          correct++;
+          input.classList.add("correct");
+          input.classList.remove("incorrect");
+        } else {
+          wrong++;
+          input.classList.add("incorrect");
+          input.classList.remove("correct");
+        }
+      });
+
+      const totalTime = Math.floor((Date.now() - startTime) / 1000);
+      const userName = document.getElementById("userName").value || "ななし";
+      const now = new Date().toLocaleString();
+      let stamp = "";
+      if (correct === 100) stamp = getStampByTime(totalTime);
+
+      const record = { name: userName, correct, wrong, blank, time: totalTime, stamp, date: now };
+      const records = JSON.parse(localStorage.getItem("mathRecords") || "[]");
+      records.push(record);
+      localStorage.setItem("mathRecords", JSON.stringify(records));
+
+      document.getElementById("resultArea").textContent =
+        `✅ 正解: ${correct} ／ ❌ ミス: ${wrong} ／ ⬜ 未記入: ${blank} ／ ⏱️ 時間: ${formatTime(totalTime)}`;
+      document.getElementById("stampArea").innerHTML = stamp ? `🎁 ごほうび: ${stamp}` : "";
+    }
+
+    function renderChart() {
+      const ctx = document.getElementById("scoreChart").getContext("2d");
+      const records = JSON.parse(localStorage.getItem("mathRecords") || "[]");
+      const labels = records.map(r => r.date);
+      const scores = records.map(r => r.correct);
+      const times = records.map(r => r.time);
+
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            { label: "得点", data: scores, borderColor: "#f77f00", backgroundColor: "rgba(255,165,0,0.2)", tension: 0.2 },
+            { label: "時間(秒)", data: times, borderColor: "#0096c7", backgroundColor: "rgba(0,150,199,0.2)", tension: 0.2 }
+          ]
+        }
+      });
+    }
+
+    function renderRanking() {
+      const records = JSON.parse(localStorage.getItem("mathRecords") || "[]");
+      const sorted = records.sort((a, b) =>
+        b.correct !== a.correct ? b.correct - a.correct : a.time - b.time
+      ).slice(0, 20);
+
+      let html = "<tr><th>順位</th><th>名前</th><th>得点</th><th>時間</th><th>スタンプ</th><th>日付</th></tr>";
+      sorted.forEach((r, i) => {
+        html += `<tr><td>${i + 1}</td><td>${r.name}</td><td>${r.correct}</td><td>${formatTime(r.time)}</td><td>${r.stamp || ""}</td><td>${r.date}</td></tr>`;
+      });
+      document.getElementById("rankingTable").innerHTML = html;
+    }
+  </script>
+</body>
+</html>
